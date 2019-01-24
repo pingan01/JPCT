@@ -19,6 +19,7 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.EGLDisplay;
 
 public class MainActivity extends AppCompatActivity {
+
     private static MainActivity master = null;
 
     private GLSurfaceView mGLView;
@@ -44,6 +45,7 @@ public class MainActivity extends AppCompatActivity {
         if (master != null) {
             copy(master);
         }
+
         super.onCreate(savedInstanceState);
         mGLView = new GLSurfaceView(getApplication());
 

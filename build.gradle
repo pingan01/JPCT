@@ -15,7 +15,6 @@ buildscript {
 allprojects {
     repositories {
         jcenter()
-        maven { url "http://dl.bintray.com/jmonkeyengine/org.jmonkeyengine" }
     }
 }
 

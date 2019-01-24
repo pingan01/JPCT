@@ -2,6 +2,8 @@ package com.lj.jpct;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.util.Log;
@@ -13,16 +15,22 @@ import com.threed.jpct.Loader;
 import com.threed.jpct.Logger;
 import com.threed.jpct.Matrix;
 import com.threed.jpct.Object3D;
-import com.threed.jpct.Primitives;
 import com.threed.jpct.RGBColor;
 import com.threed.jpct.SimpleVector;
 import com.threed.jpct.Texture;
 import com.threed.jpct.TextureManager;
 import com.threed.jpct.World;
+import com.threed.jpct.util.BitmapHelper;
 import com.threed.jpct.util.MemoryHelper;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.List;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -45,7 +53,8 @@ import javax.microedition.khronos.opengles.GL10;
 	private float touchTurn = 0;
 	private float touchTurnUp = 0;
 
-	private Texture[] mTextures;//多张纹理贴图的
+	private List<String> mTextureNames;//多张纹理贴图的
+	private String mObjPath;//模型路径
 
 	// 行走动画  
 	private int an = 2;  
@@ -63,37 +72,74 @@ import javax.microedition.khronos.opengles.GL10;
 			fb.dispose();
 		}
 		fb = new FrameBuffer(gl, w, h);
+
 		GLES20.glViewport(0, 0, w, h);
 
+		gl.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
+		world = new World();
+		// 设置了环境光源强度。负:整个场景会变暗;正:将照亮了一切。
+		world.setAmbientLight(150, 150, 150);
+
+		// 在World中创建一个新的光源
+		sun = new Light(world);
+		sun.setIntensity(250, 250, 250);
+
+
+		Texture texture4=new Texture(BitmapHelper.rescale(BitmapHelper.convert(mContext.getResources().getDrawable(R.drawable.t)),64,64));
+
+		TextureManager.getInstance().addTexture("texture4",texture4);
+
+		//3D对象
+		mZhi=loadObjModel("1.obj","1.mtl",0.1f);
+		mZhi.setTexture("texture4");
+		mZhi.strip();
+		mZhi.build();
+		//将Object3D对象添加到world集合
+		world.addObject(mZhi);
+
+		Camera cam = world.getCamera();
+		cam.moveCamera(Camera.CAMERA_MOVEOUT, 10);// 以50有速度向后移动Camera（相对于目前的方向）
+		cam.lookAt(mZhi.getTransformedCenter());//返回对象的中心--object3D.getTransformedCenter()
+
+		SimpleVector sv = new SimpleVector();//三维矢量的基础类
+		sv.set(mZhi.getTransformedCenter());
+		sv.y -= 100;//Y方向上减去100
+		sv.z -= 100;//Z方向上减去100
+		sun.setPosition(sv);//设置光源位置
+
+		MemoryHelper.compact();
+		// 强制GC和finalization工作来试图去释放一些内存，同时将当时的内存写入日志，
+		// 这样可以避免动画不连贯的情况，然而，它仅仅是减少这种情况发生的机率
 	}
 
 	public void onSurfaceCreated(GL10 gl, EGLConfig config) {
 		Log.e("TAG","onSurfaceCreated");
-		gl.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+		/**
+		 * gl.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
-		world = new World();
+		 world = new World();
 
-		world.setAmbientLight(150, 150, 150);
+		 world.setAmbientLight(150, 150, 150);
 
+		 Texture texture = new Texture(BitmapHelper.rescale(BitmapHelper.convert(mContext.getResources().getDrawable(R.drawable.rock)), 64, 64));
+		 //Texture texture2 = new Texture(BitmapHelper.rescale(BitmapHelper.convert(mContext.getResources().getDrawable(R.drawable.texture2)), 64, 64));
+		 //Texture texture3 = new Texture(BitmapHelper.rescale(BitmapHelper.convert(mContext.getResources().getDrawable(R.drawable.ogrobase)), 64, 64));
+		 Texture texture4=new Texture(BitmapHelper.rescale(BitmapHelper.convert(mContext.getResources().getDrawable(R.drawable.t)),64,64));
 
-		//Texture texture = new Texture(BitmapHelper.rescale(BitmapHelper.convert(mContext.getResources().getDrawable(R.drawable.rock)), 64, 64));
-		//Texture texture2 = new Texture(BitmapHelper.rescale(BitmapHelper.convert(mContext.getResources().getDrawable(R.drawable.texture2)), 64, 64));
-		//Texture texture3 = new Texture(BitmapHelper.rescale(BitmapHelper.convert(mContext.getResources().getDrawable(R.drawable.ogrobase)), 64, 64));
-		//Texture texture4=new Texture(BitmapHelper.rescale(BitmapHelper.convert(mContext.getResources().getDrawable(R.drawable.t)),64,64));
-
-		//TextureManager.getInstance().addTexture("texture", texture);
-		//TextureManager.getInstance().addTexture("texture2", texture2);
-		//TextureManager.getInstance().addTexture("texture3", texture3);
-		//TextureManager.getInstance().addTexture("texture4",texture4);
+		 TextureManager.getInstance().addTexture("texture", texture);
+		 //TextureManager.getInstance().addTexture("texture2", texture2);
+		 //TextureManager.getInstance().addTexture("texture3", texture3);
+		 TextureManager.getInstance().addTexture("texture4",texture4);
 
 
 		 cube = Primitives.getCube(10);
 		 cube.calcTextureWrapSpherical();
-		 //cube.setTexture("texture");
+		 cube.setTexture("texture");
 		 cube.strip();
 		 cube.build();
 
-		/**
+		 /**
 		 * rockModel = load3dsModel("rock.3ds", 1);
 		 rockModel.setTexture("texture");
 		 rockModel.strip();
@@ -110,10 +156,10 @@ import javax.microedition.khronos.opengles.GL10;
 		 mdModel.strip();
 		 mdModel.build();
 		 mdModel.translate(-2, 0, 0);
-		 */
-
+		 **/
+        /**
 		mZhi=loadObjModel("1.obj","1.mtl",0.1f);
-		//mZhi.setTexture("texture4");
+		mZhi.setTexture("texture4");
 		mZhi.strip();
 		mZhi.build();
 
@@ -137,6 +183,7 @@ import javax.microedition.khronos.opengles.GL10;
 		sv.z -= 100;
 		sun.setPosition(sv);
 		MemoryHelper.compact();
+		 */
 	}
 
 	public void onDrawFrame(GL10 gl) {
@@ -169,8 +216,6 @@ import javax.microedition.khronos.opengles.GL10;
 		 mZhi.rotateX(touchTurnUp);
 		 touchTurnUp = 0;
 		 }
-
-
 
 		if (System.nanoTime() - time >= 1000000000) {
 			Logger.log(fps + "fps");
@@ -267,7 +312,8 @@ import javax.microedition.khronos.opengles.GL10;
 		}  
 		mdModel.animate(ind, an); 
 	}
-	
+
+
 	public void setTouchTurn(float count)
 	{
 		touchTurn = count;
@@ -278,9 +324,148 @@ import javax.microedition.khronos.opengles.GL10;
 		touchTurnUp = count;
 	}
 
+
 	public void cleanUp(){
 
 		TextureManager.getInstance().removeTexture("texture");
 		TextureManager.getInstance().removeTexture("texture4");
+	}
+
+	/**
+	 * 解析OBJ模型 得到MTL文件
+	 * @param objPath
+	 * @return
+	 */
+	private String readMtlName(String objPath){
+		mObjPath=objPath;
+		String mtlName=null;
+		File objFile=new File(objPath);
+		try {
+			InputStream inputStream=new FileInputStream(objFile);
+		    Log.e("TAG","inputStream:"+(inputStream==null?"null":inputStream));
+		    if (inputStream!=null){
+				InputStreamReader inputStreamReader=new InputStreamReader(inputStream);
+				BufferedReader bufferedReader=new BufferedReader(inputStreamReader);
+				String line;
+				//分行读取
+				while ((line=bufferedReader.readLine())!=null){
+					 Log.e("TAG","line:"+line);
+					 int idx=line.indexOf("mtllib");
+					 if (idx>0){
+					 	mtlName=line.substring(idx+7);
+					 	break;
+					 }else if (line.startsWith("v")){//顶点
+
+						 break;
+					 }
+				}
+				bufferedReader.close();
+				inputStreamReader.close();
+				inputStream.close();
+			}
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		return mtlName;
+	}
+
+	/**
+	 * 解析mtl文件，得到texture文件
+	 * @param mtlPath
+	 * @return
+	 */
+    private int parseTextureNames(String mtlPath){
+
+		try {
+			File mtlFile=new File(mtlPath);
+			String textureName=null;
+			InputStream inputStream=new FileInputStream(mtlFile);
+			Log.e("TAG","inputStream--"+(inputStream==null?"null":inputStream));
+			if (inputStream!=null){
+				InputStreamReader inputStreamReader=new InputStreamReader(inputStream);
+				BufferedReader bufferedReader=new BufferedReader(inputStreamReader);
+				String line;
+				//分行读取
+				while ((line=bufferedReader.readLine())!=null){
+                         Log.e("TAG","line--"+line);
+                         int idx=line.indexOf("map_Kd");
+                         if (idx>0){
+							 textureName=line.substring(idx+7);
+                              if (!(TextureManager.getInstance().containsTexture(textureName))){
+                                   TextureManager.getInstance().addTexture(textureName);
+                                   mTextureNames.add(textureName);
+                              }
+						 } else if ((idx=line.indexOf("map_Ka"))>=0){
+                              	     textureName=line.substring(idx+7);
+                              	     if (!TextureManager.getInstance().containsTexture(textureName)){
+										 TextureManager.getInstance().addTexture(textureName);
+										 mTextureNames.add(textureName);
+									 }
+							  }
+				}
+				bufferedReader.close();
+				inputStreamReader.close();
+				inputStream.close();
+			}
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		return TextureManager.getInstance().getTextureCount();
+	}
+
+	/**
+	 * 加载所有纹理
+	 */
+	private void loadTextures(){
+
+		TextureManager tm=TextureManager.getInstance();
+		for (int i=0;i<mTextureNames.size();i++){
+			 String name=mTextureNames.get(i);
+		     Log.e("TAG","texure name"+name);
+		     if (tm.containsTexture(name)){
+		     	tm.removeAndUnload(name,fb);
+			 }
+			 else {
+		     	int idx=mObjPath.lastIndexOf('/');
+
+		     	String tPath=mObjPath.substring(0,idx+1)+name;
+
+		     	Log.e("TAG","texure path:"+tPath);
+
+		     	try {
+					Bitmap bmp = BitmapFactory.decodeFile(tPath);
+					Bitmap inputBmp = bmp;
+					int w = bmp.getWidth();
+					if ((w & (w - 1)) != 0) { //w不是2的n次幂,需要特殊处理
+
+						inputBmp = scaleBitmap(bmp);
+					}
+
+					Texture texture = new Texture(inputBmp);
+					Log.e("TAG", "纹理添加成功");
+					tm.addTexture(name, texture);
+				}catch (Exception e){
+
+                     e.printStackTrace();
+				}
+			 }
+		}
+	}
+
+	public Bitmap scaleBitmap(Bitmap bitmap){
+        int w=bitmap.getWidth();
+        int h=bitmap.getHeight();
+        int destW=1024;
+        int destH=h*destW/w;
+
+        Bitmap newBm=Bitmap.createScaledBitmap(bitmap,destW,destH,true);
+
+        return newBm;
 	}
 }
